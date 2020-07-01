@@ -3,7 +3,7 @@ from setuptools import setup
 
 def read_requirements(path):
     with open(path, 'r') as f:
-        return f.read().splitlines():
+        return f.read().splitlines()
 
 
 # load package version
@@ -19,7 +19,9 @@ extras_requirements = {
     "resource-s3": read_requirements("requirements/extras/resource-s3.txt"),
     "resource-yaml": read_requirements("requirements/extras/resource-yaml.txt"),
 }
-extras_requirements["all"] = [*reqs for reqs in extras_requirements.values()]
+extras_requirements["all"] = []
+for reqs in extras_requirements.values():
+    extras_requirements["all"].extend(reqs)
 
 setup(
     name="useful",
