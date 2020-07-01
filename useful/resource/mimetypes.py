@@ -8,7 +8,7 @@ versions 3.7 and higher. The bug was introduced while solving another bug
 """
 
 import posixpath
-import urllib
+import urllib.parse
 
 types_map = {
     ".json": "application/json"

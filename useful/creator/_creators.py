@@ -1,3 +1,4 @@
+import builtins
 import collections
 import importlib
 import logging
@@ -49,7 +50,7 @@ class BaseCreator(ABC):
         # if config is dictionary, unpack it using **config
         if isinstance(config, dict):
             instance = cls(**config)
-            _log.debug(f"Created instance of class '{cls.__name__}' from a"
+            _log.debug(f"Created instance of class '{cls.__name__}' from a "
                        f"dictionary",
                        extra={
                            "class": {
@@ -61,7 +62,7 @@ class BaseCreator(ABC):
         # if config is an iterable but not a string, unpack it using *config
         elif _is_non_string_iterable(config):
             instance = cls(*config)
-            _log.debug(f"Created instance of class '{cls.__name__}' from a"
+            _log.debug(f"Created instance of class '{cls.__name__}' from a "
                        f"non string iterable",
                        extra={
                            "class": {
@@ -73,7 +74,7 @@ class BaseCreator(ABC):
         # in any other case, do not unpack config
         else:
             instance = cls(config)
-            _log.debug(f"Created instance of class '{cls.__name__}' from a"
+            _log.debug(f"Created instance of class '{cls.__name__}' from a "
                        f"single argument of type ({type(config)})",
                        extra={
                            "class": {
@@ -225,3 +226,185 @@ class GenericCreator(BaseCreator):
                    })
 
         return instance
+
+
+class ShorthandCreator(GenericCreator):
+    """
+    A shorthand instance creator. Dictionaries of shape
+
+                    {
+                        "class.module.ClassName": {
+                            "param": "eters",
+                            "other": 123
+                        }
+                    }
+
+    can be parsed and instances of `class.module.ClassName` created.
+    """
+    @staticmethod
+    def parse_cls_string(string):
+        """
+        Parse "module.submodule.object" to 2-tuple
+        ("module.submodule", "object"). In case input string contains no dots,
+        assume the module in question is '__main__' and the whole string is an
+        object name.
+
+        Args:
+            string (str): An input string to parse
+        
+        Returns:
+            tuple: A 2-tuple containing information about `(module, object)`
+                parsed from the input string.
+        """
+        try:
+            module, class_ = string.rsplit('.', 1)
+        except ValueError:
+            module, class_ = '__main__', string
+
+        return module, class_
+
+    def _create_list(self, config):
+        return [self.create(item) for item in config]
+    
+    def _create_dict(self, config):
+        return {k: self.create(v) for k, v in config.items()}
+
+    def _create_instance(self, config):
+        if len(config) != 1:
+            raise ValueError("Invalid instance config")
+
+        # take first (and only) key, extract module and class
+        key = next(iter(config))
+        module, class_ = self.parse_cls_string(key)
+        # preorder instance creation: parse instance params before using them
+        # to recursively instantiate objects without any configuration
+        params = self.create(config[key])
+
+        # use GenericCreator.create to make an actual instance
+        return super().create({
+            "class": {
+                "name": class_,
+                "module": module
+            },
+            "params": params
+        })    
+
+    def create(self, config):
+        """
+        Recursively create instances from config. Try to create instance from
+        the config object and if that fails, recursively iterate through list
+        or dict elements/values.
+
+        Args:
+            config (dict): A config dictionary to use for extraction of class
+                name, module and params.
+
+        Returns:
+            object: Object created from config.
+        """
+        try:
+            return self._create_instance(config)
+        except Exception:
+            pass
+
+        if isinstance(config, list):
+            return self._create_list(config)
+        elif isinstance(config, dict):
+            return self._create_dict(config)
+
+        # if everything else fails, return raw config
+        return config
+
+
+class ShorthandCreatorWithCache(ShorthandCreator):
+    """
+    Cache only "non-builtin" instantiated objects from config by using
+    ShorthandCreator. We define "non-builtin" as not having the exactly same
+    type as any of the builtin types.
+    """
+    _cache = {}
+    _builtin_types = {
+        t for t in builtins.__dict__.values() if isinstance(t, type)}
+
+    @staticmethod
+    def _calc_config_hash(config):
+        """
+        When working with ruamel.yaml, we can use YAML anchors (&) and aliases
+        (*) to refer to already created objects. This also means that the
+        dictionary produced by ruamel.yaml will share actual memory with the
+        original anchor dictionary. The consequence of this is that we can
+        freely use object id to cache instances by.
+
+        Args:
+            config (object): Any Python object.
+        
+        Returns:
+            int: A hash used for differentiating different configs/objects.
+        """
+        return id(config)
+
+    def _smart_cache(self, hash_, instance, config):
+        """
+        There is no need to cache everything. Cache only non-builtin types.
+        """
+        if type(instance) in self._builtin_types:
+            _log.debug(f"Ignore caching builtin type {type(instance)} from "
+                       f"hash '{hash_}'",
+                       extra={"config": config})
+            return
+
+        _log.debug(f"Saving {type(instance)} to cache with hash '{hash_}'",
+                   extra={"config": config})
+        self._cache[hash_] = instance
+
+    def create(self, config):
+        """
+        Reuse cached instance if current config was already parsed, which is
+        determined by a custom hash value. In case it wasn't parsed already,
+        parse it and possibly* add it to cache.
+        
+        * see `ShorthandCreatorWithCache._smart_cache` for more details
+
+        Args:
+            config (dict): A config dictionary to use for extraction of class
+                name, module and params.
+
+        Returns:
+            object: Object created from config.
+        """
+        hash_ = self._calc_config_hash(config)
+        if hash_ not in self._cache:
+            instance = super().create(config)
+            _log.debug(f"Creating {type(instance)} from hash '{hash_}'",
+                       extra={"config": config})
+            self._smart_cache(hash_, instance, config)
+        else:
+            _log.debug(f"Using cached {type(instance)} from hash '{hash_}'",
+                       extra={"config": config})
+            instance = self._cache[hash_]
+
+        return instance
+
+
+def get_object(key):
+    """
+    A ShorthandCreator companion function used for getting any object from
+    the configuration. For example, config
+
+                    {
+                        "function": {
+                            "useful.creators.get_object": "math.sqrt",
+                        }
+                    }
+
+    will be parsed as
+
+                    {
+                        "function": math.sqrt
+                    }
+
+    This allows us to access variables, classes, functions etc.
+    """
+    module_name, object_name = ShorthandCreator.parse_cls_string(key)
+    module = importlib.import_module(module_name)
+    return getattr(module, object_name)

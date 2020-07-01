@@ -1,3 +1,7 @@
-from useful.creator._creators import BaseCreator  # noqa
-from useful.creator._creators import RegistryCreator, GenericCreator  # noqa
-from useful.creator.version import __version__  # noqa
+from useful.creator._creators import BaseCreator, RegistryCreator  # noqa
+from useful.creator._creators import GenericCreator, ShorthandCreator  # noqa
+from useful.creator._creators import ShorthandCreatorWithCache, get_object  # noqa
+
+generic_creator = GenericCreator()
+shorthand_creator = ShorthandCreator()
+shorthand_creator_with_cache = ShorthandCreatorWithCache()

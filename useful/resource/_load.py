@@ -4,23 +4,24 @@ import time
 from useful.resource.readers import ResourceURL, readers
 from useful.resource.parsers import parsers
 
+DEFAULT_TIMEOUT = 0
 _log = logging.getLogger(__name__)
 
 
-def cached_load(timeout=300):
+def load_generator(timeout=None):
     """
     Define timeout to be used in `load()` function.
 
     Args:
         timeout (int, optional): Number of seconds to cache data without
-            checking if it has changed in any way. Defaults to 300.
+            checking if it has changed in any way. Defaults to None.
 
     Returns:
         function: A function using timeout variable
     """
     memory = {}
 
-    def load(url, mimetype=None, parser=None, hook=None):
+    def load(url, mimetype=None, parser=None, hook=None, timeout=timeout):
         """
         Load resource from uri or cache if already used before.
 
@@ -33,6 +34,10 @@ def cached_load(timeout=300):
                 Defaults to None.
             hook (callable, optional): An optional function to call after
                 reading and parsing the data. Defaults to None.
+            timeout (int, optional): Number of seconds to cache data without
+                checking if it has changed in any way. Defaults to the value
+                provided to `cached_load` decorator. If the value is negative,
+                don't cache anything.
 
         Raises:
             ValueError: No reader supports provided url scheme
@@ -42,6 +47,9 @@ def cached_load(timeout=300):
             object: Final data after running reader, parser and hook on the
                 resource url
         """
+        if timeout is None:
+            timeout = DEFAULT_TIMEOUT
+
         hash_ = None
 
         # get the reader from url
@@ -96,17 +104,18 @@ def cached_load(timeout=300):
             data = hook(data)
 
         # cache results and other relevant data
-        memory[url] = {
-            'time': time.time(),
-            'hash': hash_,
-            'data': data,
-            'hook': hook
-        }
-        _log.debug(f"Upserting url '{url}' in memory",
-                   extra={"url": url, "hash": hash_})
+        if timeout >= 0:
+            memory[url] = {
+                'time': time.time(),
+                'hash': hash_,
+                'data': data,
+                'hook': hook
+            }
+            _log.debug(f"Upserting url '{url}' in memory",
+                    extra={"url": url, "hash": hash_})
         return data
 
     return load
 
 
-load = cached_load(timeout=300)
+load = load_generator()

@@ -1,0 +1,97 @@
+import importlib
+import inspect
+import logging
+import sys
+from functools import wraps
+
+_log = logging.getLogger(__name__)
+
+
+def use(*modules, strict=False):
+    """
+    Import modules using their string name and set appropriate attribute in the
+    module that called this function, in the same way regular import works.
+
+    Args:
+        modules ([str]): A list of strings each representing a module
+        strict (bool): Strictness indicator. If set to `True`, all modules must
+            be imported successfully. If `False`, silently ignore failures.
+            Defaults to False.
+
+    Raises:
+        ImportError: When `strict = True` and the module is not found.
+    """
+    _caller = inspect.currentframe().f_back
+    _name = _caller.f_globals['__name__']
+    _this = sys.modules[_name]
+
+    try:
+        for module in modules:
+            name = module.split(".", 1)[0]
+            module_ = __import__(module, globals(), locals())
+            setattr(_this, name, module_)
+            _log.debug(f"Importing '{module}' into '{_name}'")
+    except ImportError:
+        if strict:
+            raise
+        _log.debug(f"Failed to import '{module}' into '{_name}'")
+
+
+def installed(*modules):
+    """
+    Check if all modules from the list are installed by importing them.
+
+    Args:
+        modules ([str]): A list of strings each representing a module
+
+    Returns:
+        bool: An indicator whether all modules from the provided list are
+            installed or not.
+    """
+    try:
+        for module in modules:
+            importlib.import_module(module)
+    except ImportError:
+        return False
+    
+    return True
+
+
+def requires(*modules, strict=False):
+    """
+    Check if all of the modules from the list are installed by importing them.
+    Unlike `use()`, this function does not set the attribute with the importing
+    module name to the appropriate calling module.
+
+    Args:
+        modules ([str]): A list of strings each representing a module
+        strict (bool): Strictness indicator. If set to `True`, all modules must
+            be imported successfully. If `False`, silently ignore failures.
+            Defaults to False.
+
+    Returns:
+        bool: An indicator whether all modules from the provided list are
+            installed or not.
+    """
+    exceptions = []
+    for module in modules:
+        try:
+            importlib.import_module(module)
+        except ImportError as e:
+            exceptions.append(e)
+
+    everything_installed = len(exceptions) == 0
+
+    def decorator(code):
+        # return regular code if everything is installed
+        if everything_installed:
+            return code
+
+        # ignore the error silently and return None ("delete" code)
+        if not strict:
+            return None
+
+        # raise first exception
+        raise exceptions[0]
+
+    return decorator

@@ -2,21 +2,14 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 
-try:
-    import botocore
-    import boto3
-    import s3fs
-    EXTRA_S3_INSTALLED = True
-except ModuleNotFoundError:
-    EXTRA_S3_INSTALLED = False
-
-try:
-    import gcsfs
-    EXTRA_GS_INSTALLED = True
-except ModuleNotFoundError:
-    EXTRA_GS_INSTALLED = False
-
+from useful.modules import use, installed, requires
 from useful.resource import mimetypes
+
+_gs_reqs = ["botocore", "boto3", "s3fs"]
+_s3_reqs = ["gcsfs"]
+
+use(*_gs_reqs, strict=False)
+use(*_s3_reqs, strict=False)
 
 _log = logging.getLogger(__name__)
 
@@ -115,6 +108,7 @@ class LocalFile(Reader):
         return sha256sum
 
 
+@requires(*_s3_reqs, strict=False)
 class S3File(Reader):
     def __init__(self, url):
         """
@@ -128,7 +122,6 @@ class S3File(Reader):
             AssertionError: If ResourceURL.scheme is not `s3` the resource is
                 not an s3 resource.
         """
-        assert EXTRA_S3_INSTALLED is True
         assert url.scheme == "s3"
         super().__init__(url)
         self.bucket, self.key = self.url.path.split("/", 1)
@@ -158,6 +151,7 @@ class S3File(Reader):
                          extra={"url": self.url.url})
 
 
+@requires(*_gs_reqs, strict=False)
 class GSFile(Reader):
     def __init__(self, url):
         """
@@ -171,7 +165,6 @@ class GSFile(Reader):
             AssertionError: If ResourceURL.scheme is not `gs` the resource is
                 not an Google Storage resource.
         """
-        assert EXTRA_GS_INSTALLED is True
         assert url.scheme == "gs"
         super().__init__(url)
         self.fs = gcsfs.GCSFileSystem()
@@ -205,6 +198,10 @@ class GSFile(Reader):
 # a simple dict of supported resource readers
 readers = {
     "file": LocalFile,
-    "s3": S3File,
-    "gs": GSFile
 }
+
+if installed(*_gs_reqs):
+    readers["gs"]  = GSFile
+
+if installed(*_s3_reqs):
+    readers["s3"] = S3File
