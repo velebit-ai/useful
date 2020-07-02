@@ -379,9 +379,9 @@ class ShorthandCreatorWithCache(ShorthandCreator):
                        extra={"config": config})
             self._smart_cache(hash_, instance, config)
         else:
+            instance = self._cache[hash_]
             _log.debug(f"Using cached {type(instance)} from hash '{hash_}'",
                        extra={"config": config})
-            instance = self._cache[hash_]
 
         return instance
 

@@ -3,7 +3,7 @@ import logging
 import pickle
 import time
 
-from useful.modules import use, installed, requires
+from useful.modules import use, installed
 from useful.resource import mimetypes
 
 _yaml_reqs = ["ruamel.yaml"]
@@ -66,7 +66,6 @@ class JSON(Parser):
         return super().parse(json.load)
 
 
-@requires(*_yaml_reqs, strict=False)
 class YAML(Parser):
     def __init__(self, reader):
         """

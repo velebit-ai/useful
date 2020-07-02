@@ -1,1 +1,1 @@
-from useful.modules._modules import use, installed, requires  # noqa
+from useful.modules._modules import use, installed  # noqa
