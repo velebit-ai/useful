@@ -3,7 +3,7 @@ import os
 from munch import munchify
 
 import useful.resource
-from useful.creator import shorthand_creator_with_cache
+from useful.creator import shorthand_creator
 
 
 def get_hook(validator=None):
@@ -18,7 +18,7 @@ def get_hook(validator=None):
         function: A function for validating and converting dictionary to Munch
     """
     if validator is None:
-        validator = shorthand_creator_with_cache
+        validator = shorthand_creator
 
     def hook(dictionary):
         """

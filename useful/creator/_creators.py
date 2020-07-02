@@ -239,8 +239,31 @@ class ShorthandCreator(GenericCreator):
                         }
                     }
 
-    can be parsed and instances of `class.module.ClassName` created.
+    can be parsed and instances of `class.module.ClassName` created. This
+    creator also implements internal cache to take advantage of input configs
+    with multiple occuring references. For example, in case we have input
+    config
+
+                    {
+                        "first": configuration,
+                        "second": configuration
+                    }
+
+    the ShorthandCreator will return a dictionary
+
+                    {
+                        "first": instance_from_configuration,
+                        "second": instance_from_configuration
+                    }
+
+    where created instances are created only once, and afterwards simply a
+    reference is used, the same way it happens in the input config. This plays
+    well with YAML anchors and aliases and python library ruamel.yaml, which
+    uses references in places where aliases were used in plain yaml files.
     """
+    _builtin_types = {
+        t for t in builtins.__dict__.values() if isinstance(t, type)}
+
     @staticmethod
     def parse_cls_string(string):
         """
@@ -251,7 +274,7 @@ class ShorthandCreator(GenericCreator):
 
         Args:
             string (str): An input string to parse
-        
+
         Returns:
             tuple: A 2-tuple containing information about `(module, object)`
                 parsed from the input string.
@@ -263,13 +286,13 @@ class ShorthandCreator(GenericCreator):
 
         return module, class_
 
-    def _create_list(self, config):
-        return [self.create(item) for item in config]
-    
-    def _create_dict(self, config):
-        return {k: self.create(v) for k, v in config.items()}
+    def _create_list(self, config, cache):
+        return [self.create(item, cache) for item in config]
 
-    def _create_instance(self, config):
+    def _create_dict(self, config, cache):
+        return {k: self.create(v, cache) for k, v in config.items()}
+
+    def _create_instance(self, config, cache):
         if len(config) != 1:
             raise ValueError("Invalid instance config")
 
@@ -278,7 +301,7 @@ class ShorthandCreator(GenericCreator):
         module, class_ = self.parse_cls_string(key)
         # preorder instance creation: parse instance params before using them
         # to recursively instantiate objects without any configuration
-        params = self.create(config[key])
+        params = self.create(config[key], cache)
 
         # use GenericCreator.create to make an actual instance
         return super().create({
@@ -289,42 +312,34 @@ class ShorthandCreator(GenericCreator):
             "params": params
         })    
 
-    def create(self, config):
+    def _create_anything(self, config, cache=None):
         """
-        Recursively create instances from config. Try to create instance from
+        Main function for actual config parsing and object creation. Here we
+        recursively create instances from config. Try to create instance from
         the config object and if that fails, recursively iterate through list
-        or dict elements/values.
+        or dict elements/values. If everything fails, leave the input config
+        as-is.
 
         Args:
             config (dict): A config dictionary to use for extraction of class
                 name, module and params.
+            cache (dict): Cache to use when creating instance recursively.
 
         Returns:
             object: Object created from config.
         """
         try:
-            return self._create_instance(config)
+            return self._create_instance(config, cache)
         except Exception:
             pass
 
         if isinstance(config, list):
-            return self._create_list(config)
+            return self._create_list(config, cache)
         elif isinstance(config, dict):
-            return self._create_dict(config)
+            return self._create_dict(config, cache)
 
         # if everything else fails, return raw config
         return config
-
-
-class ShorthandCreatorWithCache(ShorthandCreator):
-    """
-    Cache only "non-builtin" instantiated objects from config by using
-    ShorthandCreator. We define "non-builtin" as not having the exactly same
-    type as any of the builtin types.
-    """
-    _cache = {}
-    _builtin_types = {
-        t for t in builtins.__dict__.values() if isinstance(t, type)}
 
     @staticmethod
     def _calc_config_hash(config):
@@ -337,15 +352,23 @@ class ShorthandCreatorWithCache(ShorthandCreator):
 
         Args:
             config (object): Any Python object.
-        
+
         Returns:
             int: A hash used for differentiating different configs/objects.
         """
         return id(config)
 
-    def _smart_cache(self, hash_, instance, config):
+    def _smart_cache(self, cache, hash_, instance, config):
         """
         There is no need to cache everything. Cache only non-builtin types.
+
+        Args:
+            cache (dict): Cache to use when creating instance recursively.
+            hash_ (int): A hash used for differentiating different
+                configs/objects.
+            instance (object): Actual instance to cache (or not).
+            config (dict): Config from which instance was created. Passed
+                merely for the purpose of more verbose logging.
         """
         if type(instance) in self._builtin_types:
             _log.debug(f"Ignore caching builtin type {type(instance)} from "
@@ -355,31 +378,36 @@ class ShorthandCreatorWithCache(ShorthandCreator):
 
         _log.debug(f"Saving {type(instance)} to cache with hash '{hash_}'",
                    extra={"config": config})
-        self._cache[hash_] = instance
+        cache[hash_] = instance
+        return cache
 
-    def create(self, config):
+    def create(self, config, cache=None):
         """
         Reuse cached instance if current config was already parsed, which is
         determined by a custom hash value. In case it wasn't parsed already,
         parse it and possibly* add it to cache.
-        
+
         * see `ShorthandCreatorWithCache._smart_cache` for more details
 
         Args:
             config (dict): A config dictionary to use for extraction of class
                 name, module and params.
+            cache (dict): Cache to use when creating instance recursively.
 
         Returns:
             object: Object created from config.
         """
+        if cache is None:
+            cache = {}
+
         hash_ = self._calc_config_hash(config)
-        if hash_ not in self._cache:
-            instance = super().create(config)
+        if hash_ not in cache:
+            instance = self._create_anything(config, cache)
             _log.debug(f"Creating {type(instance)} from hash '{hash_}'",
                        extra={"config": config})
-            self._smart_cache(hash_, instance, config)
+            cache = self._smart_cache(cache, hash_, instance, config)
         else:
-            instance = self._cache[hash_]
+            instance = cache[hash_]
             _log.debug(f"Using cached {type(instance)} from hash '{hash_}'",
                        extra={"config": config})
 
