@@ -7,7 +7,7 @@ versions 3.7 and higher. The bug was introduced while solving another bug
                     https://bugs.python.org/issue4963
 """
 
-import posixpath
+import os.path
 import urllib.parse
 
 types_map = {
@@ -32,7 +32,7 @@ def guess_type(url, strict=True):
     capabilities, argument strict is not used at all.
     """
     url = urllib.parse.splittype(url)[1]
-    ext = posixpath.splitext(url)[1].lower()
+    ext = os.path.splitext(url)[1].lower()
 
     if ext in types_map:
         return types_map[ext], None

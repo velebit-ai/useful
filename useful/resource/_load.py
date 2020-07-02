@@ -4,7 +4,7 @@ import time
 from useful.resource.readers import ResourceURL, readers
 from useful.resource.parsers import parsers
 
-DEFAULT_TIMEOUT = 0
+DEFAULT_TIMEOUT = -1
 _log = logging.getLogger(__name__)
 
 
@@ -14,7 +14,8 @@ def load_generator(timeout=None):
 
     Args:
         timeout (int, optional): Number of seconds to cache data without
-            checking if it has changed in any way. Defaults to None.
+            checking if it has changed in any way. Defaults to None, which
+            means `DEFAULT_TIMEOUT` value will be used.
 
     Returns:
         function: A function using timeout variable
@@ -36,8 +37,8 @@ def load_generator(timeout=None):
                 reading and parsing the data. Defaults to None.
             timeout (int, optional): Number of seconds to cache data without
                 checking if it has changed in any way. Defaults to the value
-                provided to `cached_load` decorator. If the value is negative,
-                don't cache anything.
+                provided to `load_generator` decorator. If the value is
+                negative, don't cache anything.
 
         Raises:
             ValueError: No reader supports provided url scheme
@@ -86,7 +87,8 @@ def load_generator(timeout=None):
         hook = memory.get(url, {}).get("hook", hook)
         # use already calculated above hash sum or calculate hash sum if it was
         # never calculated
-        hash_ = hash_ or reader.hash()
+        if timeout >= 0:
+            hash_ = hash_ or reader.hash()
 
         # use user-provided parser or get parser from mimetype
         try:

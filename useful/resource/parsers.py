@@ -3,11 +3,11 @@ import logging
 import pickle
 import time
 
-from useful.modules import use, installed
+from useful.modules import import_modules, installed
 from useful.resource import mimetypes
 
 _yaml_reqs = ["ruamel.yaml"]
-use(*_yaml_reqs, strict=False)
+import_modules(*_yaml_reqs, raise_on_fail=False)
 
 _log = logging.getLogger(__name__)
 

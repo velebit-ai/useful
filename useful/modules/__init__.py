@@ -1,1 +1,1 @@
-from useful.modules._modules import use, installed  # noqa
+from useful.modules._modules import import_modules, installed  # noqa

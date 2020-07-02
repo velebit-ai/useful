@@ -2,14 +2,14 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 
-from useful.modules import use, installed
+from useful.modules import import_modules, installed
 from useful.resource import mimetypes
 
 _gs_reqs = ["botocore", "boto3", "s3fs"]
 _s3_reqs = ["gcsfs"]
 
-use(*_gs_reqs, strict=False)
-use(*_s3_reqs, strict=False)
+import_modules(*_gs_reqs, raise_on_fail=False)
+import_modules(*_s3_reqs, raise_on_fail=False)
 
 _log = logging.getLogger(__name__)
 

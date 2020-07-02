@@ -7,19 +7,19 @@ from functools import wraps
 _log = logging.getLogger(__name__)
 
 
-def use(*modules, strict=False):
+def import_modules(*modules, raise_on_fail=True):
     """
     Import modules using their string name and set appropriate attribute in the
     module that called this function, in the same way regular import works.
 
     Args:
         modules ([str]): A list of strings each representing a module
-        strict (bool): Strictness indicator. If set to `True`, all modules must
-            be imported successfully. If `False`, silently ignore failures.
-            Defaults to False.
+        raise_on_fail (bool): If set to `True`, all modules must be imported
+            successfully. If `False`, silently ignore failures. Defaults to
+            True.
 
     Raises:
-        ImportError: When `strict = True` and the module is not found.
+        ImportError: When `raise_on_fail = True` and the module is not found.
     """
     _caller = inspect.currentframe().f_back
     _name = _caller.f_globals['__name__']
@@ -32,7 +32,7 @@ def use(*modules, strict=False):
             setattr(_this, name, module_)
             _log.debug(f"Importing '{module}' into '{_name}'")
     except ImportError:
-        if strict:
+        if raise_on_fail:
             raise
         _log.debug(f"Failed to import '{module}' into '{_name}'")
 
