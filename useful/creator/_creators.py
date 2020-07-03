@@ -369,12 +369,15 @@ class ShorthandCreator(GenericCreator):
             instance (object): Actual instance to cache (or not).
             config (dict): Config from which instance was created. Passed
                 merely for the purpose of more verbose logging.
+        
+        Returns:
+            dict: updated input cache. Returned for convenience only.
         """
         if type(instance) in self._builtin_types:
             _log.debug(f"Ignore caching builtin type {type(instance)} from "
                        f"hash '{hash_}'",
                        extra={"config": config})
-            return
+            return cache
 
         _log.debug(f"Saving {type(instance)} to cache with hash '{hash_}'",
                    extra={"config": config})
