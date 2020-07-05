@@ -3,9 +3,11 @@ import logging
 import pickle
 import time
 
-import ruamel.yaml
-
+from useful.modules import import_modules, installed
 from useful.resource import mimetypes
+
+_yaml_reqs = ["ruamel.yaml"]
+import_modules(*_yaml_reqs, raise_on_fail=False)
 
 _log = logging.getLogger(__name__)
 
@@ -107,17 +109,20 @@ class Generic(Parser):
     def parse(self):
         return super().parse(lambda x: x.read())
 
-
-# add custom yaml mime type
-mimetypes.add_type("application/yaml", ".yaml")
-mimetypes.add_type("application/yaml", ".yml")
 # add custom pickle mime type
 mimetypes.add_type("application/pickle", ".pkl")
 
 # a simple dict of supported parsers
 parsers = {
     "application/json": JSON,
-    "application/yaml": YAML,
     "application/pickle": Pickle,
     None: Generic
 }
+
+if installed(*_yaml_reqs):
+    # add custom yaml mime type
+    mimetypes.add_type("application/yaml", ".yaml")
+    mimetypes.add_type("application/yaml", ".yml")
+
+    # add custom yaml parser
+    parsers["application/yaml"] = YAML
