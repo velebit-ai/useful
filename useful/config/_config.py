@@ -79,3 +79,35 @@ def from_env(environment_variable, validator=None):
     assert environment_variable in os.environ
     url = os.environ[environment_variable]
     return from_url(url, validator)
+
+
+def load(value, validator=None):
+    """
+    Based on type and value of argument `value`, pick whether to call
+    `from_dict`, `from_env` or `from_url`.
+
+    Args:
+        value (str or dict): One of the following:
+            1. Dictionary
+            2. Environment variable name of the variable containing URL to the
+               resource containing a dictionary
+            3. Resource URL containing dictionary
+        validator (Callable): Callable to use for validation
+
+    Returns:
+        Munch: Validated output.
+    """
+    # 1. Dictionary
+    if isinstance(value, dict):
+        return from_dict(value, validator=validator)
+
+    # if not a dictionary, it must be a string
+    if not isinstance(value, str):
+        raise TypeError("Argument `value` should be either a string or a dict")
+
+    # 2. Environment variable
+    if value in os.environ:
+        return from_env(value)
+
+    # 3. Resource URL
+    return from_url(value)

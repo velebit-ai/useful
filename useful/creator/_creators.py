@@ -63,7 +63,7 @@ class BaseCreator(ABC):
         elif _is_non_string_iterable(config):
             instance = cls(*config)
             _log.debug(f"Created instance of class '{cls.__name__}' from a "
-                       f"non string iterable",
+                       f"non string, non-dict iterable",
                        extra={
                            "class": {
                                "module": cls.__module__,
@@ -241,10 +241,18 @@ class ShorthandCreator(GenericCreator):
 
     can be parsed and instances of `class.module.ClassName` created. This
     creator also implements internal cache to take advantage of input configs
-    with multiple occuring references. For example, in case we have input
-    config
+    with multiple occuring references. For example, in case we have
 
-                    {
+                    configuration = {
+                        "class.module.ClassName": {
+                            "param": "eters",
+                            "other": 123
+                        }
+                    }
+
+    and
+
+                    config = {
                         "first": configuration,
                         "second": configuration
                     }
@@ -256,35 +264,60 @@ class ShorthandCreator(GenericCreator):
                         "second": instance_from_configuration
                     }
 
-    where created instances are created only once, and afterwards simply a
-    reference is used, the same way it happens in the input config. This plays
-    well with YAML anchors and aliases and python library ruamel.yaml, which
-    uses references in places where aliases were used in plain yaml files.
+    where instance is created only once, and afterwards simply a reference is
+    used, the same way it happens in the input config. On the other hand, if we
+    have
+
+                    config = {
+                        "first": {
+                            "class.module.ClassName": {
+                                "param": "eters",
+                                "other": 123
+                            }
+                        },
+                        "second": {
+                            "class.module.ClassName": {
+                                "param": "eters",
+                                "other": 123
+                            }
+                        }
+                    }
+
+    the ShorthandCreator will return a dictionary
+
+                    {
+                        "first": instance_1_from_configuration,
+                        "second": instance_2_from_configuration
+                    }
+
+    where instance_1_from_configuration and instance_2_from_configuration are
+    separate instances of the same class.
     """
     _builtin_types = {
         t for t in builtins.__dict__.values() if isinstance(t, type)}
 
     @staticmethod
-    def parse_cls_string(string):
+    def parse_dotted_key(key):
         """
         Parse "module.submodule.object" to 2-tuple
         ("module.submodule", "object"). In case input string contains no dots,
-        assume the module in question is '__main__' and the whole string is an
-        object name.
+        raise an exception.
 
         Args:
-            string (str): An input string to parse
+            key (str): An input string to parse
 
         Returns:
             tuple: A 2-tuple containing information about `(module, object)`
                 parsed from the input string.
-        """
-        try:
-            module, class_ = string.rsplit('.', 1)
-        except ValueError:
-            module, class_ = '__main__', string
 
-        return module, class_
+        Raises:
+            ValueError: In case input contains no dots
+        """
+        if '.' not in key:
+            raise ValueError(f"Input string *must* contain both module and an "
+                             f"object. String '{key}' does not.")
+
+        return key.rsplit('.', 1)
 
     def _create_list(self, config, cache):
         return [self.create(item, cache) for item in config]
@@ -293,12 +326,29 @@ class ShorthandCreator(GenericCreator):
         return {k: self.create(v, cache) for k, v in config.items()}
 
     def _create_instance(self, config, cache):
-        if len(config) != 1:
-            raise ValueError("Invalid instance config")
+        """
+        Convert
 
+                    {
+                        "class.module.ClassName": {
+                            "param": "eters",
+                            "other": 123
+                        }
+                    }
+
+        to `class.module.ClassName(param="eters", other=123)` instance.
+
+        Args:
+            config (dict): A config dictionary to use for extraction of class
+                name, module and params.
+            cache (dict): Cache to use when creating instance recursively.
+
+        Returns:
+            object: Instance created from config.
+        """
         # take first (and only) key, extract module and class
         key = next(iter(config))
-        module, class_ = self.parse_cls_string(key)
+        module, class_ = self.parse_dotted_key(key)
         # preorder instance creation: parse instance params before using them
         # to recursively instantiate objects without any configuration
         params = self.create(config[key], cache)
@@ -310,7 +360,7 @@ class ShorthandCreator(GenericCreator):
                 "module": module
             },
             "params": params
-        })    
+        })
 
     def _create_anything(self, config, cache=None):
         """
@@ -328,16 +378,20 @@ class ShorthandCreator(GenericCreator):
         Returns:
             object: Object created from config.
         """
-        try:
-            return self._create_instance(config, cache)
-        except Exception:
-            pass
-
         if isinstance(config, list):
             return self._create_list(config, cache)
         elif isinstance(config, dict):
-            return self._create_dict(config, cache)
+            # only try to create an instance from dictionaries with a single
+            # key
+            if len(config) == 1:
+                key = next(iter(config))
+                # only create an instance from "dotted keys"
+                if '.' in key:
+                    return self._create_instance(config, cache)
 
+            # if we are unable to create an instance from dict, assume it is a
+            # dictionary
+            return self._create_dict(config, cache)
         # if everything else fails, return raw config
         return config
 
@@ -369,7 +423,7 @@ class ShorthandCreator(GenericCreator):
             instance (object): Actual instance to cache (or not).
             config (dict): Config from which instance was created. Passed
                 merely for the purpose of more verbose logging.
-        
+
         Returns:
             dict: updated input cache. Returned for convenience only.
         """
@@ -435,7 +489,15 @@ def get_object(key):
                     }
 
     This allows us to access variables, classes, functions etc.
+
+    Args:
+        key (str): A string of form "module.submodule.object", parseable by
+            ShorthandCreator.parse_dotted_key method. A valid example would
+            be "math.sqrt".
+
+    Returns:
+        object: imported object
     """
-    module_name, object_name = ShorthandCreator.parse_cls_string(key)
+    module_name, object_name = ShorthandCreator.parse_dotted_key(key)
     module = importlib.import_module(module_name)
     return getattr(module, object_name)
