@@ -89,10 +89,13 @@ setup(
     author_email="dev@velebit.ai",
     packages=[
         "useful.config",
-        "useful.version",
         "useful.creator",
+        "useful.decorators",
+        "useful.dictionary",
         "useful.modules",
         "useful.resource"
+        "useful.time"
+        "useful.version",
     ],
     install_requires=requirements,
     extras_require=extras_requirements,
