@@ -2,41 +2,6 @@
 
 This repo contains a collection of solutions to often ocurring problems. We deal with unified way to setup and standardize logs, along with a way to simply load both local and remote configuration files and other resources.
 
-## useful.logs
-
-A simple function for Python logging setup. Using this allows for the consistent log format across multiple programs, which is very convenient when using microservice architecture. Usage is quite simple, with `useful.logs.setup` requiring only a single call, presumably from the `main` script, for example
-
-```python
-import logging
-import useful.logs
-
-useful.logs.setup()
-_log = logging.getLogger(__name__)
-
-
-if __name__ == '__main__':
-    _log.info("testing", extra={"app": "AppName", "metric": 1.2})
-```
-
-Now every other part of the program called from the `main` script uses logging without any
-knowledge of log format. An example would be
-
-```python
-import logging
-
-_log = logging.getLogger("test")
-
-
-def test():
-    _log.debug("log message", extra={"app": "AppName", "metric": 1.2})
-```
-
-When argument `extra` is provided with `JSON` logging enabled, all of the values provided are logged together with timestamps and log message in a `JSON` log.
-
-With this approach you can even have some level of control over log format from other Python modules you do not maintain yourself.
-
-***
-
 ## useful-creator
 
 A part of the `useful` Python modules collection dedicated to creating object instances from a configuration dictionary. Working with dictionaries instead of `JSON` or `Yaml` allows us to decouple from handling/parsing configuration files. The general idea is
@@ -255,47 +220,56 @@ config = useful.resource.load('s3://bucket/config.yaml')
 
 We achieve this unified access in multiple stages:
 
-### 0. Cache
-
-`useful.resource.load` provides an implementation of config caching. This means that you can call `useful.resource.load(uri)` twice in a row, and the second call can simply use cached version from the first call. The behaviour options can be modified either by providing an aditional argument `timeout` to `useful.resource.load`, or by changing the `useful.resource.DEFAULT_TIMEOUT` value which is a value used in case `timeout` argument is not provided when calling `useful.resource.load`. We differentiate three separate cases:
-
-1. `timeout < 0` - Do not use caching. This is the default behaviour.
-2. `timeout = 0` - Use caching. On every `useful.resource.load(uri)` call check if the content at `uri` changed (Check out step 3 for more details).
-3. `timeout > 0` - Use caching. If less time than `timeout` passed between two calls of `useful.resource.load` on the same `uri`, don't even check if the content on the `uri` has changed or not. Simply return the cached value immediately. This options exists to prevent constant access to files in case `useful.resource.load` gets called often on the same `uri`. A good example would be an API where you dynamically load resources when handling the request.
-
 ### 1. Scheme and format extraction
 
-The only information we must have before we start is an URI for an object we want to access. Using URI `<schema>://<string>.<extension>` we can easily extract schema/protocol and format/extension.
+The only information we must have before we start is an URI for an object we want to access. Using URI `<scheme>://<string>.<extension>` we can easily extract scheme/protocol and format/extension.
 
-### 2. Accessing and reading the resource
+### 2. Downloading the resource
 
-In this step, depending on the schema, we provide a `Reader` object that implements method `Reader.open()`. This provides a file-like object and allows us to read data byte by byte, in the same way as built-in function `open()` does for local files. Currently we support multiple schemas
+In this step, depending on the scheme, we provide a `downloader` function that returns a file-like object and allows us to read data byte by byte, in the same way as built-in function `open()` does for local files. Currently we support multiple schemas
 
-* `s3://` - AWS S3 storage
-* `gs://` - Google Cloud Storage
-* `file://` - local storage
-* `<no schema>` - local storage
+* `file://` - local storage - using built-in `open()` (on-demand)
+* `<no scheme>` - local storage - using built-in `open()` (on-demand)
+* `http://` - HTTP resource - in-memory download beforehand
+* `https://` - HTTPS resource - in-memory download beforehand
+* `ssh://` - SSH/SFTP - save the whole object in-memory beforehand
+* `scp://` - SSH/SFTP - save the whole object in-memory beforehand
+* `sftp://` - SSH/SFTP - save the whole object in-memory beforehand
+* `s3://` - AWS S3 storage - save the whole object in-memory beforehand
+* `s3fs://` - AWS S3 storage - read the object on-demand
+* `gs://` - Google Cloud Storage - save the whole object in-memory beforehand
+* `gsfs://` - Google Cloud Storage - read the object on-demand
 
-but more can be easily added by editing `useful.resource.readers.readers` dictionary, a schema to reader implementation mapping. `useful.resource.load` function implements result caching with invalidation based on file changes. That is the reason we also implement method `Reader.hash()` which is also used to calculate object checksum without reading/downloading the whole resource. See step (4) for more details.
+but more can be easily added by using `useful.resource.downloaders.add_downloader` function.
 
-### 3. Parsing the actual data
+### 3. Parsing the actual bytes
 
-From step (2) we have a file-like object and now we want to parse the data inside. In the step (1) we extracted the format/extension and now we can use a `Parser` object to actually parse the data. At the moment we only support:
+From step (2) we have a file-like object and now we want to parse the data inside. In the step (1) we extracted the format/extension and now we can use a `parser` function to actually parse the data. At the moment we only support:
 
 * `.json` - JSON format
 * `.yaml` - YAML format
+* `.csv` - CSV format
+* `.text` - plain text format
 * `.yml` - YAML format
 * `.pkl` - Python pickle format
+* `.pickle` - Python pickle format
 * `<anything else>` - raw binary data
 
-but more can be easily added by editing `useful.resource.parsers.parsers` dictionary, an extension to parser implementation mapping.
+but more can be easily added by using `useful.resource.parsers.add_parser` function.
 
 ### 4. [Optional] hook
 
-Let's say we wanted to initialize our object `Model` with pretrained weights stored in a file `s3://bucket/weights.json`. Both downloading the weights and loading them into the program are slow because we are working with large models. This is why we need to avoid downloading the resource again if we can. We do this by checking the return value after calling `Reader.hash()`. Since we also want to avoid frequent loading of weights into our model, we want to cache the `Model` instance itself, instead of raw weights resource. This is where `hook` comes in. `hook` is an optional argument for the function `useful.resource.load`. It is a `callable` that accepts the output from the step (3) and runs additional modification and/or creation of objects instances. In our example, we would simply run
+`hook` is an optional argument for the function `useful.resource.load`. It is a `callable` that accepts the output from the step (3) and runs additional modification and/or creation of objects instances. For example, we could simply run
 
 ```python
 model = useful.resource.load('s3://bucket/weights.json', hook=Model)
+```
+
+instead of running
+
+```python
+weights = useful.resource.load('s3://bucket/weights.json')
+model = Model(weights)
 ```
 
 ***
@@ -325,7 +299,7 @@ Our experience is that when working with production services `useful.config.from
 ```python
 from voluptuous import Schema
 
-environment_variable = "USEFUL_CONFIG"
+environment_variable = "EXAMPLE_CONFIG"
 
 schema = Schema({
     "test": int
@@ -348,7 +322,7 @@ if __name__ == "__main__":
 Since an object returned from `useful.config.from_env` is a [`Munch`](https://github.com/Infinidat/munch) instance, we can simply access `config.test` for the config above. You can run the program above by executing
 
 ```bash
-USEFUL_CONFIG=/useful/config.yaml python3 -m main
+EXAMPLE_CONFIG=/useful/config.yaml python3 -m main
 ```
 
 where file `/useful/config.yaml` contains
