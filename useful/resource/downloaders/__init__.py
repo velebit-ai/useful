@@ -22,4 +22,7 @@ if installed("s3fs"):
 if installed("paramiko"):
     from useful.resource.downloaders import ssh  # noqa
 
+if installed("requests"):
+    from useful.resource.downloaders import http  # noqa
+
 del installed

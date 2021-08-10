@@ -1,8 +1,6 @@
 import logging
-import requests
-from io import BytesIO
 
-from useful.resource.util import maybe_urlparse, maybe_urlunparse
+from useful.resource.util import maybe_urlparse
 
 _log = logging.getLogger(__name__)
 
@@ -38,23 +36,9 @@ def local_storage(url, *args, **kwargs):
     return open(path, mode, *args, **kwargs)
 
 
-def http(url, *args, **kwargs):
-    """
-    An http/https in-memory downloader. Downloads the file in-memory and
-    returns an io.BytesIO object with downloaded bytes.
-    """
-    raw_url = maybe_urlunparse(url)
-
-    _log.debug(f"Sending HTTP request: GET {raw_url}")
-    response = requests.get(raw_url, *args, **kwargs)
-    return BytesIO(response.content)
-
-
 # a simple dict of supported resource downloaders
 downloaders = {
     "file": local_storage,
-    "http": http,
-    "https": http
 }
 
 

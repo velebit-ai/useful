@@ -19,6 +19,8 @@ def ssh(url, *args, **kwargs):
 
     _log.debug("Initializing paramiko.SSHClient client")
     ssh_client = paramiko.SSHClient()
+    _log.debug("Setting missing host key policy - auto add")
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     _log.debug("Loading system SSH keys")
     ssh_client.load_system_host_keys()
 

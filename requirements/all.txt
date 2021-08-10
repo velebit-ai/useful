@@ -4,5 +4,6 @@
 -r extras/resource-downloader-s3.txt
 -r extras/resource-downloader-s3fs.txt
 -r extras/resource-downloader-ssh.txt
+-r extras/resource-downloader-http.txt
 -r extras/resource-parser-yaml.txt
 -r extras/resource-parser-numpy.txt

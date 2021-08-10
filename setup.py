@@ -57,6 +57,7 @@ extras_requirements = {
     "resource-downloader-s3": read_requirements("requirements/extras/resource-downloader-s3.txt"),  # noqa
     "resource-downloader-s3fs": read_requirements("requirements/extras/resource-downloader-s3fs.txt"),  # noqa
     "resource-downloader-ssh": read_requirements("requirements/extras/resource-downloader-ssh.txt"),  # noqa
+    "resource-downloader-http": read_requirements("requirements/extras/resource-downloader-http.txt"),  # noqa
     "resource-parser-yaml": read_requirements("requirements/extras/resource-parser-yaml.txt"),  # noqa
     "resource-parser-numpy": read_requirements("requirements/extras/resource-parser-numpy.txt"),  # noqa
 }

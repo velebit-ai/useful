@@ -1,4 +1,4 @@
-import importlib
+import importlib.util
 import inspect
 import logging
 import sys
@@ -52,7 +52,12 @@ def installed(*modules):
     """
     failed = []
     for module in modules:
-        if importlib.util.find_spec(module) is None:
+        try:
+            found = importlib.util.find_spec(module)
+        except ModuleNotFoundError:
+            found = None
+
+        if found is None:
             _log.debug(f"Failed to find module '{module}'")
             failed.append(module)
         else:

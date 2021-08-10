@@ -17,6 +17,7 @@ Below is a list of all extras requirements provided by this package grouped by h
       * resource-downloader-s3 (`boto3`)
       * resource-downloader-s3fs (`s3fs`)
       * resource-downloader-ssh (`paramiko`)
+      * resource-downloader-http (`requests`)
     * resource-parser-all
       * resource-parser-yaml (`ruamel.yaml`)
       * resource-parser-numpy (`numpy`)
