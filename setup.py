@@ -38,7 +38,11 @@ def read_requirements(*paths):
     for path in paths:
         with open(path, 'r') as f:
             nth_reqs = f.read().splitlines()
-            reqs.extend(nth_reqs)
+            # remove empty lines and comments
+            filtered = filter(lambda e: e.strip() is "", nth_reqs)
+            filtered = filter(lambda e: e.strip().startswith('#'), filtered)
+            filtered = list(filtered)
+            reqs.extend(filtered)
 
     return list(set(reqs))
 
@@ -95,6 +99,8 @@ setup(
         "useful.dictionary",
         "useful.modules",
         "useful.resource",
+        "useful.resource.downloaders",
+        "useful.resource.parsers",
         "useful.time",
         "useful.version",
     ],
