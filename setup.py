@@ -93,8 +93,8 @@ setup(
         "useful.decorators",
         "useful.dictionary",
         "useful.modules",
-        "useful.resource"
-        "useful.time"
+        "useful.resource",
+        "useful.time",
         "useful.version",
     ],
     install_requires=requirements,
