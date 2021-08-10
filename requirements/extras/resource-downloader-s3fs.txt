@@ -1,1 +1,3 @@
-s3fs~=0.3.0
+# currently s3fs supports only older version of boto3. Hence, we won't use it
+# until support matches up with latest boto3 version
+# s3fs~=2021.7.0
