@@ -11,7 +11,6 @@ import pickle
 from useful.resource import mimetypes
 from useful.resource.util import maybe_urlparse
 
-
 # a simple dict of supported parsers
 parsers = {
     "application/json": json.load,

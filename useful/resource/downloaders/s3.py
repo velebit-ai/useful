@@ -1,4 +1,5 @@
 import logging
+import os
 from io import BytesIO
 
 import boto3
@@ -19,14 +20,25 @@ def s3(url, *args, **kwargs):
     path = parsed.path.lstrip("/")
     _log.debug(f"Parsing url '{url}' into '{bucket_name=}' and '{path=}'")
 
-    _log.debug("Initializing boto3 s3 client")
-    s3 = boto3.client('s3', *args, **kwargs)  # noqa
+    # allow the s3 endpoint to be changed through env variable. This makes it
+    # possible to use self-hosted S3 alternatives
+    final_kwargs = {}
+    endpoint_url = os.environ.get('AWS_S3_ENDPOINT_URL', None)
+    if endpoint_url is not None:
+        final_kwargs["endpoint_url"] = endpoint_url
+
+    final_kwargs.update(kwargs)
+
+    _log.debug("Initializing boto3 s3 resource")
+    s3 = boto3.resource('s3', *args, **final_kwargs)
+    bucket = s3.Bucket(bucket_name)
 
     _log.debug(f"Downloading the object '{bucket_name}/{path}' into file-like"
                f" object")
     buffer = BytesIO()
-    s3.download_fileobj(bucket_name, path, buffer)
+    bucket.download_fileobj(path, buffer)
 
+    buffer.seek(0)
     return buffer
 
 
