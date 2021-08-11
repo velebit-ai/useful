@@ -39,8 +39,8 @@ def read_requirements(*paths):
         with open(path, 'r') as f:
             nth_reqs = f.read().splitlines()
             # remove empty lines and comments
-            filtered = filter(lambda e: e.strip() is "", nth_reqs)
-            filtered = filter(lambda e: e.strip().startswith('#'), filtered)
+            filtered = filter(lambda e: e.strip() is not "", nth_reqs)
+            filtered = filter(lambda e: not e.strip().startswith('#'), filtered)
             filtered = list(filtered)
             reqs.extend(filtered)
 
