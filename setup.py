@@ -1,27 +1,80 @@
 from setuptools import setup
 
 
-def read_requirements(path):
-    with open(path, 'r') as f:
-        return f.read().splitlines()
+def merge_extras_reqs(extras_requirements, pattern):
+    """
+    Merge extras requirements dictionary keys if they start with string
+    `pattern`.
+
+    Args:
+        extras_requirements ({str: [str]}): A dictionary containing extras
+            names and its requirements list.
+        pattern (str): Pattern to use for selecting keys to merge.
+
+    Returns:
+        list: A list of strings representing merged requirements from all of
+            the extras groups matching the pattern.
+    """
+    requirements = []
+    for key in extras_requirements:
+        if key.startswith(pattern):
+            requirements.extend(extras_requirements[key])
+
+    return list(set(requirements))
+
+
+def read_requirements(*paths):
+    """
+    Open multiple requirements.txt files and concatenate results into a single
+    requirements list without repeats.
+
+    Args:
+        paths ([str]): A list of requirements file paths
+
+    Returns:
+        list: A list of requirements from all of the files
+    """
+    reqs = []
+    for path in paths:
+        with open(path, 'r') as f:
+            nth_reqs = f.read().splitlines()
+            # remove empty lines and comments
+            filtered = filter(lambda e: e.strip() is "", nth_reqs)
+            filtered = filter(lambda e: e.strip().startswith('#'), filtered)
+            filtered = list(filtered)
+            reqs.extend(filtered)
+
+    return list(set(reqs))
 
 
 # load package version
-exec(open("useful/core/version.py").read())
+exec(open("useful/version/version.py").read())
 
 # load minimal requirements
 requirements = []
 
-# load extras requirements
+# load "atomic" extras requirements
 extras_requirements = {
     "config": read_requirements("requirements/extras/config.txt"),
-    "resource-gs": read_requirements("requirements/extras/resource-gs.txt"),
-    "resource-s3": read_requirements("requirements/extras/resource-s3.txt"),
-    "resource-yaml": read_requirements("requirements/extras/resource-yaml.txt"),
+    "resource-downloader-gs": read_requirements("requirements/extras/resource-downloader-gs.txt"),  # noqa
+    "resource-downloader-gsfs": read_requirements("requirements/extras/resource-downloader-gsfs.txt"),  # noqa
+    "resource-downloader-s3": read_requirements("requirements/extras/resource-downloader-s3.txt"),  # noqa
+    "resource-downloader-s3fs": read_requirements("requirements/extras/resource-downloader-s3fs.txt"),  # noqa
+    "resource-downloader-ssh": read_requirements("requirements/extras/resource-downloader-ssh.txt"),  # noqa
+    "resource-downloader-http": read_requirements("requirements/extras/resource-downloader-http.txt"),  # noqa
+    "resource-parser-yaml": read_requirements("requirements/extras/resource-parser-yaml.txt"),  # noqa
+    "resource-parser-numpy": read_requirements("requirements/extras/resource-parser-numpy.txt"),  # noqa
 }
-extras_requirements["all"] = []
-for reqs in extras_requirements.values():
-    extras_requirements["all"].extend(reqs)
+
+# create artifical groupings for easier install on user-side
+extras_groups = {}
+extras_groups["resource-downloader-all"] = merge_extras_reqs(extras_requirements, pattern="resource-downloader")  # noqa
+extras_groups["resource-parser-all"] = merge_extras_reqs(extras_requirements, pattern="resource-parser")  # noqa
+extras_groups["resource-all"] = merge_extras_reqs(extras_requirements, pattern="resource")  # noqa
+extras_groups["all"] = merge_extras_reqs(extras_requirements, pattern="")
+
+# add to extras_requirements
+extras_requirements.update(extras_groups)
 
 setup(
     name="useful",
@@ -41,11 +94,15 @@ setup(
     author_email="dev@velebit.ai",
     packages=[
         "useful.config",
-        "useful.core",
         "useful.creator",
-        "useful.logs",
+        "useful.decorators",
+        "useful.dictionary",
         "useful.modules",
-        "useful.resource"
+        "useful.resource",
+        "useful.resource.downloaders",
+        "useful.resource.parsers",
+        "useful.time",
+        "useful.version",
     ],
     install_requires=requirements,
     extras_require=extras_requirements,
