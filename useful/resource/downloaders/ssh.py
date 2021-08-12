@@ -17,7 +17,13 @@ threaded_lru_cache = threaded_decorator(lru_cache(maxsize=1024))
 def get_paramiko_sshclient():
     _log.debug("Initializing paramiko.SSHClient for thread: "
                f"{threading.current_thread().ident}")
-    return paramiko.SSHClient()
+    ssh_client = paramiko.SSHClient()
+    _log.debug("Setting missing host key policy - auto add")
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    _log.debug("Loading system SSH keys")
+    ssh_client.load_system_host_keys()
+
+    return ssh_client
 
 
 def ssh(url, *args, **kwargs):
@@ -30,10 +36,6 @@ def ssh(url, *args, **kwargs):
 
     _log.debug("Initializing paramiko.SSHClient client")
     ssh_client = get_paramiko_sshclient()
-    _log.debug("Setting missing host key policy - auto add")
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    _log.debug("Loading system SSH keys")
-    ssh_client.load_system_host_keys()
 
     _log.debug(f"Opening SSH connection to "
                f"{parsed.username}@{parsed.hostname}:{port}")
