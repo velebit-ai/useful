@@ -1,13 +1,24 @@
 import logging
 import os
+import threading
 from io import BytesIO
+from functools import lru_cache
 
 import boto3
 
 from useful.resource.util import maybe_urlparse
 from useful.resource.downloaders._downloaders import add_downloader
+from useful.decorators import threaded_decorator
 
 _log = logging.getLogger(__name__)
+threaded_lru_cache = threaded_decorator(lru_cache(maxsize=1024))
+
+
+@threaded_lru_cache
+def get_s3_resource(*args, **kwargs):
+    _log.debug("Initializing boto.resource for thread: "
+               f"{threading.current_thread().ident}")
+    return boto3.resource('s3', *args, **kwargs)
 
 
 def s3(url, *args, **kwargs):
@@ -30,7 +41,7 @@ def s3(url, *args, **kwargs):
     final_kwargs.update(kwargs)
 
     _log.debug("Initializing boto3 s3 resource")
-    s3 = boto3.resource('s3', *args, **final_kwargs)
+    s3 = get_s3_resource(*args, **final_kwargs)
     bucket = s3.Bucket(bucket_name)
 
     _log.debug(f"Downloading the object '{bucket_name}/{path}' into file-like"

@@ -1,5 +1,6 @@
 import logging
 import time
+import threading
 from functools import wraps
 
 _log = logging.getLogger(__name__)
@@ -50,3 +51,22 @@ def timing(f):
                    f"{delta:2.6f} sec")
         return result
     return wrap
+
+
+def threaded_decorator(decorator):
+    @wraps(decorator)
+    def _decorator(f):
+        memory = threading.local()
+
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                memory.f
+            except AttributeError:
+                memory.f = decorator(f)
+
+            return memory.f(*args, **kwargs)
+
+        return wrapper
+
+    return _decorator

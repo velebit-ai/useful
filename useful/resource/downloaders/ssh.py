@@ -1,12 +1,23 @@
 import logging
+import threading
 from io import BytesIO
+from functools import lru_cache
 
 import paramiko
 
 from useful.resource.util import maybe_urlparse
 from useful.resource.downloaders._downloaders import add_downloader
+from useful.decorators import threaded_decorator
 
 _log = logging.getLogger(__name__)
+threaded_lru_cache = threaded_decorator(lru_cache(maxsize=1024))
+
+
+@threaded_lru_cache
+def get_paramiko_sshclient():
+    _log.debug("Initializing paramiko.SSHClient for thread: "
+               f"{threading.current_thread().ident}")
+    return paramiko.SSHClient()
 
 
 def ssh(url, *args, **kwargs):
@@ -18,7 +29,7 @@ def ssh(url, *args, **kwargs):
     port = parsed.port or 22
 
     _log.debug("Initializing paramiko.SSHClient client")
-    ssh_client = paramiko.SSHClient()
+    ssh_client = get_paramiko_sshclient()
     _log.debug("Setting missing host key policy - auto add")
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     _log.debug("Loading system SSH keys")
