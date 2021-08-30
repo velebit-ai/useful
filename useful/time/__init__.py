@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+import datetime
 
 _log = logging.getLogger(__name__)
 
@@ -54,8 +54,11 @@ def datetime_to_string(dt, Z=False):
         _log.debug("Pretending input date is UTC: insert UTC as timezone info")
         dt_utc = dt_utc.replace(tzinfo=datetime.timezone.utc)
 
+    _log.debug("Converting to ISO format string")
+    dt_utc = dt_utc.isoformat(timespec='seconds')
+
     if Z is True:
         _log.debug("Replacing +00:00 with Z, if it exists")
-        dt_utc = dt_utc.isoformat(timespec='seconds').replace('+00:00', 'Z')
+        dt_utc = dt_utc.replace('+00:00', 'Z')
 
     return dt_utc
