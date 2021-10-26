@@ -26,7 +26,12 @@ def string_to_datetime(dt_str):
     _log.debug("Replacing +HHSS with +HH:SS, if it exists")
     dt_str = re.sub(r"\+([0-9][0-9])([0-9][0-9])$", "+\g<1>:\g<2>", dt_str)  # noqa
     _log.debug(f"Read date from iso format: {dt_str}")
-    dt = datetime.datetime.fromisoformat(dt_str)
+    try:
+        # fromisoformat only supports 0, 3 and 6 decimal places for subsecond
+        # precision. We want to support an arbitrary number of decimal places.
+        dt = datetime.datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%f%z")
+    except ValueError:
+        dt = datetime.datetime.fromisoformat(dt_str)
     _log.debug("Convert to UTC timezone")
     dt_utc = dt.astimezone(datetime.timezone.utc)
     _log.debug("Remove timezone info")
@@ -34,7 +39,7 @@ def string_to_datetime(dt_str):
     return dt_naive
 
 
-def datetime_to_string(dt, Z=False):
+def datetime_to_string(dt, Z=False, timespec='seconds'):
     """
     Convert datetime.datetime object into a ISO 8601 compatible string. Treat
     as offset-naive, which is interpreted as UTC.
@@ -44,10 +49,12 @@ def datetime_to_string(dt, Z=False):
 
     Args:
         dt (datetime.datetime): Input datetime object
-        Z (bool): A flag indicating whether or not to replce +00:00 with Z
+        Z (bool): A flag indicating whether or not to replace +00:00 with Z
+        timespec (str): Defaults to seconds. For more info check out
+            https://docs.python.org/3/library/datetime.html#datetime.datetime.isoformat
 
     Returns:
-        string: ISO 8601 compatible string with seconds precisions.
+        string: ISO 8601 compatible string with `timespec` precision.
     """
     dt_utc = dt
     if dt_utc.tzinfo is None:
@@ -55,7 +62,7 @@ def datetime_to_string(dt, Z=False):
         dt_utc = dt_utc.replace(tzinfo=datetime.timezone.utc)
 
     _log.debug("Converting to ISO format string")
-    dt_utc = dt_utc.isoformat(timespec='seconds')
+    dt_utc = dt_utc.isoformat(timespec=timespec)
 
     if Z is True:
         _log.debug("Replacing +00:00 with Z, if it exists")
