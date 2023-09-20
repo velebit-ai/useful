@@ -203,3 +203,26 @@ obj = class.module.ClassName(param="eters", other=123)
 **Note.** When working with objects from the main file, you can use `__main__.ClassName`
 
 ***
+
+### Placeholders
+
+ShorthandCreator also supports placeholder values.
+
+```python
+from useful.creator import ShorthandCreator, inject_placeholders
+
+
+configuration = {
+    "param": "<some_name>"
+}
+
+creator = ShorthandCreator()
+obj = creator.create(configuration)
+
+# initialize some_name
+some_name_value = 123
+
+inject_placeholders(obj, some_name=some_name_value)
+```
+
+which allows us to lazily load parts of the config.

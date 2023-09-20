@@ -107,7 +107,7 @@ def load(value, validator=None):
 
     # 2. Environment variable
     if value in os.environ:
-        return from_env(value)
+        return from_env(value, validator=validator)
 
     # 3. Resource URL
-    return from_url(value)
+    return from_url(value, validator=validator)

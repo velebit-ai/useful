@@ -3,6 +3,7 @@ import collections
 import importlib
 import logging
 from abc import ABC, abstractmethod
+from keyword import iskeyword
 
 _log = logging.getLogger(__name__)
 
@@ -19,6 +20,15 @@ def _is_non_string_iterable(x):
     """
     return (isinstance(x, collections.Iterable) and
             not isinstance(x, str))
+
+
+def is_valid_variable_name(name):
+    """
+    A function that checks if a string can be a variable name in Python. This
+    is used to restrict the allowed placeholder names to allow them being
+    forwarded into `inject_placeholder` as variables.
+    """
+    return name.isidentifier() and not iskeyword(name)
 
 
 class BaseCreator(ABC):
@@ -228,6 +238,15 @@ class GenericCreator(BaseCreator):
         return instance
 
 
+class Placeholder:
+    """
+    A placeholder object that will be created in place of <placeholder_name>
+    values in the config by ShorthandCreator.
+    """
+    def __init__(self, name):
+        self.name = name
+
+
 class ShorthandCreator(GenericCreator):
     """
     A shorthand instance creator. Dictionaries of shape
@@ -292,9 +311,35 @@ class ShorthandCreator(GenericCreator):
 
     where instance_1_from_configuration and instance_2_from_configuration are
     separate instances of the same class.
+
+    An addition to the original version also supports placeholder values. This
+    means whenever a string value '<placeholder_name>' exists in a config, it
+    will be evaluated as `Placeholder(name="placeholder_name")`. Starting and
+    ending placeholder character can be configured via `left_placeholder_char`
+    and `right_placeholder_char` parameters.
+
+    Args:
+        left_placeholder_char (str, optional): A left placeholder character.
+            Everything between left and right chars is a placeholder name.
+            Defaults to '<'
+        right_placeholder_char (str, optional): A right placeholder character.
+            Everything between left and right chars is a placeholder name.
+            Defaults to '>'
+        class_key (str, optional): A dictionary key to read when selecting
+            a sub-dictionary containing keys "name" and "module" with class
+            name and module, respectively. Defaults to "class".
+        params_key (str, optional): A dictionary key to read when selecting
+            values forwared to a class from key "class". Defaults to
+            "params".
     """
     _builtin_types = {
         t for t in builtins.__dict__.values() if isinstance(t, type)}
+
+    def __init__(self, left_placeholder_char='<', right_placeholder_char='>',
+                 class_key="class", params_key="params"):
+        super().__init__(class_key=class_key, params_key=params_key)
+        self.left_placeholder_char = left_placeholder_char
+        self.right_placeholder_char = right_placeholder_char
 
     @staticmethod
     def parse_dotted_key(key):
@@ -367,8 +412,9 @@ class ShorthandCreator(GenericCreator):
         Main function for actual config parsing and object creation. Here we
         recursively create instances from config. Try to create instance from
         the config object and if that fails, recursively iterate through list
-        or dict elements/values. If everything fails, leave the input config
-        as-is.
+        or dict elements/values. If the config is a string, check whether it
+        is a string that can be parsed as a Placeholder, and create one if it
+        is. If everything fails, leave the input config as-is.
 
         Args:
             config (dict): A config dictionary to use for extraction of class
@@ -392,6 +438,22 @@ class ShorthandCreator(GenericCreator):
             # if we are unable to create an instance from dict, assume it is a
             # dictionary
             return self._create_dict(config, cache)
+        # if config is a string try to create an instance of Placeholder
+        elif isinstance(config, str) and len(config) >= 2:
+            first = config[0]
+            placeholder_name = config[1:-1]
+            last = config[-1]
+
+            # check if first and last characters are valid
+            first_is_valid = first == self.left_placeholder_char
+            last_is_valid = last == self.right_placeholder_char
+
+            if first_is_valid and last_is_valid:
+                if not is_valid_variable_name(placeholder_name):
+                    raise ValueError(f"Placeholder name '{placeholder_name}' "
+                                     "is not a valid Python identifier")
+                return Placeholder(name=placeholder_name)
+
         # if everything else fails, return raw config
         return config
 
@@ -469,6 +531,51 @@ class ShorthandCreator(GenericCreator):
                        extra={"config": config})
 
         return instance
+
+
+def apply(config, f):
+    """
+    Apply a function f on the leafs of the config. This function works inplace,
+    which means that the input argument `config` *MIGHT* be modified.
+
+    Args:
+        config (dict, list or anything): A config to apply the function on.
+        f (function): A function to apply on the leaf elements of the config.
+    """
+    if isinstance(config, dict):
+        keys_or_indices = list(config.keys())
+    elif _is_non_string_iterable(config):
+        keys_or_indices = range(len(config))
+    else:
+        return f(config)
+
+    for ki in keys_or_indices:
+        value = config[ki]
+        config[ki] = apply(value, f)
+
+    return config
+
+
+def _inject_placeholder(value, **kwargs):
+    """
+    A function intended to be used with the function apply and ShorthandCreator
+    to add full support for placeholders. It checks whether a value is an
+    instance of the Placeholder class, and if its, it returns the actual value
+    if provided within kwargs.
+    """
+    if isinstance(value, Placeholder):
+        if value.name in kwargs:
+            return kwargs[value.name]
+
+    return value
+
+
+def inject_placeholders(config, **kwargs):
+    """
+    A simple function combining apply and _inject_placeholders intendend to be
+    used together with ShorthandCreator.
+    """
+    return apply(config, lambda value: _inject_placeholder(value, **kwargs))
 
 
 def get_object(key):
