@@ -17,7 +17,7 @@ def _is_non_string_iterable(x):
     Returns:
         bool: True if non-string iterable. False otherwise
     """
-    return (isinstance(x, collections.Iterable) and
+    return (isinstance(x, collections.abc.Iterable) and
             not isinstance(x, str))
 
 
